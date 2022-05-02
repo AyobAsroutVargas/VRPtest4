@@ -59,7 +59,6 @@ std::vector<std::vector<int>> Gvns::constructSolution(){
   std::set<int> tempNodes = problem_.nodes_;
 
   while (tempNodes.size() != 1) {
-    //int currentIndex = problem_.vehicles_[carIndex].tour.size() - 1;
     int bestNodeIndex = selectFromRCL(carIndex, tempNodes);
 
     problem_.vehicles_[carIndex].tour.push_back(bestNodeIndex);
@@ -80,63 +79,58 @@ std::vector<std::vector<int>> Gvns::constructSolution(){
 std::vector<std::vector<int>> Gvns::shake(std::vector<std::vector<int>> initialSolution, int k) {
   struct timeval time;
   gettimeofday(&time,NULL);
-  srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
+  srand((time.tv_sec * 10000) + (time.tv_usec / 10000));
   std::set<std::pair<std::pair<int,int>, std::pair<int,int>>> madeMoves;
   std::vector<std::vector<int>> result(initialSolution);
 
   for (int i = 0; i < k; i++) {
     int currentRoute = rand() % initialSolution.size();
-    //int CurrentNodeIndex = rand() % initialSolution[currentRoute].size();
-    int CurrentNodeIndex = 1 + (rand() % (initialSolution[currentRoute].size() - 2));
-
-
-    // std::pair<int,int> testPair = std::make_pair(currentRoute, CurrentNodeIndex);
-
-    // while (madeMoves.count(testPair)) {
-    //   currentRoute = rand() % initialSolution.size();
-    //   CurrentNodeIndex = 1 + (rand() % (initialSolution[currentRoute].size() - 2));
-    // }
+    int Currentmax = initialSolution[currentRoute].size() -2;
+    int CurrentNodeIndex = 1 + (Currentmax - 1) * (rand() / RAND_MAX);
 
     int potentialRoute = rand() % initialSolution.size();
-    while (currentRoute == potentialRoute) {
+    while (currentRoute == potentialRoute || initialSolution[potentialRoute].size() >= maxClients_ + 2) {
       potentialRoute = rand() % initialSolution.size();
     }
-    //int NewNodeIndex = (rand() % (initialSolution[potentialRoute].size() - 2)) + 1;
-    int NewNodeIndex = 1 + (rand() % (initialSolution[potentialRoute].size() - 2));
 
-    // madeMoves.insert(std::make_pair(potentialRoute, NewNodeIndex));
+    int potentialMax = initialSolution[potentialRoute].size() - 2;
+    int NewNodeIndex = 1 + (potentialMax - 1) * (rand() / RAND_MAX);
+
     std::pair<int,int> currentPair = std::make_pair(currentRoute, CurrentNodeIndex);
     std::pair<int,int> potentialPair = std::make_pair(potentialRoute, NewNodeIndex);
     std::pair<std::pair<int,int>, std::pair<int,int>> test = std::make_pair(currentPair, potentialPair);
 
     while (madeMoves.count(test)) {
       currentRoute = rand() % initialSolution.size();
-      CurrentNodeIndex = 1 + (rand() % (initialSolution[currentRoute].size() - 2));
+      CurrentNodeIndex = 1 + (rand() % (initialSolution[currentRoute].size() - 3));
 
       potentialRoute = rand() % initialSolution.size();
       while (currentRoute == potentialRoute) {
         potentialRoute = rand() % initialSolution.size();
       }
-      NewNodeIndex = 1 + (rand() % (initialSolution[potentialRoute].size() - 2));
+      NewNodeIndex = 1 + (rand() % (initialSolution[potentialRoute].size() - 3));
 
       currentPair = std::make_pair(currentRoute, CurrentNodeIndex);
       potentialPair = std::make_pair(potentialRoute, NewNodeIndex);
       test = std::make_pair(currentPair, potentialPair);
     }
 
-    
-    result[currentRoute].erase(result[currentRoute].begin() + CurrentNodeIndex);
-    result[potentialRoute].insert(result[potentialRoute].begin() + NewNodeIndex, initialSolution[currentRoute][CurrentNodeIndex]);
+    auto it = result[currentRoute].begin() + CurrentNodeIndex;
+    std::rotate(it, it+1, result[currentRoute].end());
+    int node = result[currentRoute][result[currentRoute].size() - 1];
+    result[currentRoute].pop_back();
+    result[potentialRoute].insert(result[potentialRoute].begin() + NewNodeIndex, node);
+    madeMoves.insert(test);
   }
   return result;
 }
 
 std::vector<std::vector<int>> Gvns::intensifie(std::vector<std::vector<int>> initialSolution) {
   int lValue = 0;
-  std::vector<std::vector<int>> result = initialSolution;
-  while (lValue < 4) {
+  std::vector<std::vector<int>> result(initialSolution);
+  while (lValue < localStructures_.size()) {
     Solution current(result, problem_.distanceMatrix_);
-    std::vector<std::vector<int>> currentSolution = localStructures_[lValue]->Search(current, maxClients_);
+    std::vector<std::vector<int>> currentSolution(localStructures_[lValue]->Search(current, maxClients_));
     Solution bestNeighboor(currentSolution, problem_.distanceMatrix_);
     if (bestNeighboor.tourDistance() < current.tourDistance()) {
       result = currentSolution;
@@ -150,40 +144,16 @@ std::vector<std::vector<int>> Gvns::intensifie(std::vector<std::vector<int>> ini
 
 std::vector<std::vector<int>> Gvns::solve() {
   int k = 1;
-  // int l = 1;
   int noUpgradeCount = 0;
-  std::vector<std::vector<int>> initialSolution = constructSolution();
-  //std::vector<std::vector<int>> currentSolution = initialSolution;
-  std::vector<std::vector<int>> BestSolution = initialSolution;
-  std::vector<std::vector<int>> BestLocalSolution = initialSolution;
-  for (int i = 0; i < 2000 && noUpgradeCount < 1000; i++) {
+  std::vector<std::vector<int>> initialSolution(constructSolution());
+  std::vector<std::vector<int>> BestSolution(initialSolution);
+  for (int i = 0; i < 2000 && noUpgradeCount < 1500; i++) {
     initialSolution = constructSolution();
     k = 1;
-    BestLocalSolution = initialSolution;
-    while (k < kMax_) {
-      //std::vector<std::vector<int>> currentSolution = shake(initialSolution, k);
-      //initialSolution = constructSolution();
-      std::vector<std::vector<int>> intensifiedCurrent = intensifie(initialSolution);
-
-      // Solution kk2(currentSolution, problem_.distanceMatrix_);
-      // int kcurrentSolution22 = kk2.tourDistance();
-
-      // Solution kk1(intensifiedCurrent, problem_.distanceMatrix_);
-      // int kintensifiedCurrent11 = kk1.tourDistance();
-
-      // Solution kk3(BestLocalSolution, problem_.distanceMatrix_);
-      // int kBestSolution33 = kk3.tourDistance();
-      // l = 1;
-      // while (l < 4) {
-      //   Solution current(currentSolution, problem_.distanceMatrix_);
-      //   Solution intensified(intensifiedCurrent, problem_.distanceMatrix_);
-      //   if (intensified.tourDistance() < current.tourDistance()) {
-      //     currentSolution = intensifiedCurrent;
-      //     l = 1;
-      //   } else {
-      //     l++;
-      //   }
-      // }
+    std::vector<std::vector<int>> BestLocalSolution(initialSolution);
+    while (k <= kMax_) {
+      std::vector<std::vector<int>> currentSolution(shake(initialSolution, k));
+      std::vector<std::vector<int>> intensifiedCurrent(intensifie(currentSolution));
       Solution current(intensifiedCurrent, problem_.distanceMatrix_);
       Solution best(BestLocalSolution, problem_.distanceMatrix_);
       if (current.tourDistance() < best.tourDistance()) {
@@ -195,8 +165,6 @@ std::vector<std::vector<int>> Gvns::solve() {
     }
     Solution current(BestLocalSolution, problem_.distanceMatrix_);
     Solution best(BestSolution, problem_.distanceMatrix_);
-    // int kbest44 = best.tourDistance();
-    // int kbestLocal5 = current.tourDistance();
     if (current.tourDistance() < best.tourDistance()) {
       BestSolution = BestLocalSolution;
       noUpgradeCount = 0;

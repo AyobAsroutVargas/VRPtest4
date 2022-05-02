@@ -2,10 +2,12 @@
 #define GVNS
 
 #include <vector>
+#include <algorithm>
 #include <set>
 #include <climits>
 #include <cstdlib>
 #include <ctime>
+#include <random>
 #include "vehicle.h"
 #include "problem.h"
 #include "solution.h"
